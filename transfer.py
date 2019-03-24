@@ -43,7 +43,7 @@ def im_convert(tensor):
 
 
 def get_features(image, model, layers=None):
-    
+
     if layers is None:
         layers = {'0': 'conv1_1',  # style
                   '5': 'conv2_1',  # style
@@ -61,6 +61,14 @@ def get_features(image, model, layers=None):
     return features
 
 
+def gram_matrix(tensor):
+    _, d, h, w = tensor.shape
+    tensor = tensor.view(d, h * w)
+    gram = torch.mm(tensor, tensor.t())
+
+    return gram
+
+
 # use the pretrained vgg19 CNN
 vgg = models.vgg19(pretrained=True).features
 
@@ -72,6 +80,26 @@ for param in vgg.parameters():
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 vgg.to(device)
 
-print(vgg)
+# load in content and style image
+content = load_image('images/janelle.png').to(device)
+# resize style image to match content image
+style = load_image('images/delaunay.jpg', shape=content.shape[-2:]).to(device)
 
+# get desired content and style features
+content_features = get_features(content, vgg)
+style_features = get_features(style, vgg)
+
+# calculate gram matrices for style representation layers
+style_grams = {layer: gram_matrix(style_features[layer]) for layer in style_features}
+
+# prepare a copy of the content image that will be iteratively altered
+target = content.clone().requires_grad_(True).to(device)
+
+# set weights to fiddle with the way the style is transfered
+style_weights = {'conv1_1': 1.,
+                 'conv2_1': 0.8,
+                 'conv3_1': 0.5}
+
+content_weight = 1
+style_weight = 3e6
 
