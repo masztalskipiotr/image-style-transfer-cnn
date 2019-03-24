@@ -6,6 +6,7 @@ import torch
 import torch.optim as optim
 from torchvision import transforms, models
 
+
 def load_image(path, max_size=400, shape=None):
     image = Image.open(path).convert('RGB')
 
@@ -54,8 +55,8 @@ def get_features(image, model, layers=None):
     x = image
     # model._modules is a dictionary holding each module in the model
     for name, layer in model._modules.items():
+        x = layer(x)
         if name in layers:
-            x = layer(x)
             features[layers[name]] = x
 
     return features
@@ -103,3 +104,38 @@ style_weights = {'conv1_1': 1.,
 content_weight = 1
 style_weight = 3e6
 
+show_every = 500
+
+optimizer = optim.Adam([target], lr=0.003)
+steps = 2000
+
+for ii in range(1, steps+1):
+    target_features = get_features(target, vgg)
+    content_loss = torch.mean((content_features['conv4_2'] - \
+                               target_features['conv4_2']) ** 2)
+    
+    style_loss = 0
+
+    for layer in style_weights:
+        target_feature = target_features[layer]
+        style_feature = style_features[layer]
+        _, d, h, w = target_feature.shape
+
+        target_gram = gram_matrix(target_feature)
+        style_gram = gram_matrix(style_feature)
+
+        layer_style_loss = torch.mean((style_gram - target_gram) ** 2) * style_weights[layer]
+        style_loss += layer_style_loss / (d * h * w)
+
+    total_loss = content_weight * content_loss + style_weight * style_loss
+
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+
+    if ii % show_every == 0:
+        print('Total loss: ', total_loss.item())
+
+# display the final image and smile
+plt.imshow(im_convert(target))
+plt.show()
