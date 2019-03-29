@@ -1,0 +1,6 @@
+{
+    "num_steps" : 2000,
+    "show_every" : 200,
+    "content_weight" : 1,
+    "style_weight" : 3e11
+}

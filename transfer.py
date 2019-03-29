@@ -1,10 +1,10 @@
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
-
 import torch
 import torch.optim as optim
 from torchvision import transforms, models
+import json
 
 
 def load_image(path, max_size=400, shape=None):
@@ -69,6 +69,9 @@ def gram_matrix(tensor):
 
     return gram
 
+# load configuration data
+with open('config.json') as config_file:
+    config_data = json.load(config_file)
 
 # use the pretrained vgg19 CNN
 vgg = models.vgg19(pretrained=True).features
@@ -82,9 +85,9 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 vgg.to(device)
 
 # load in content and style image
-content = load_image('images/janelle.png').to(device)
+content = load_image('images/space_needle.jpg').to(device)
 # resize style image to match content image
-style = load_image('images/delaunay.jpg', shape=content.shape[-2:]).to(device)
+style = load_image('images/ben_passmore.jpg', shape=content.shape[-2:]).to(device)
 
 # get desired content and style features
 content_features = get_features(content, vgg)
@@ -101,13 +104,13 @@ style_weights = {'conv1_1': 1.,
                  'conv2_1': 0.8,
                  'conv3_1': 0.5}
 
-content_weight = 1
-style_weight = 3e6
+content_weight = config_data['content_weight']
+style_weight = config_data['style_weight']
 
-show_every = 500
+show_every = config_data['show_every']
 
 optimizer = optim.Adam([target], lr=0.003)
-steps = 2000
+steps = config_data['num_steps']
 
 for ii in range(1, steps+1):
     target_features = get_features(target, vgg)
