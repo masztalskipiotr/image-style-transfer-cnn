@@ -7,6 +7,11 @@ from torchvision import transforms, models
 import json
 
 
+# load configuration data
+with open('config.json') as config_file:
+    config_data = json.load(config_file)
+
+
 def load_image(path, max_size=400, shape=None):
     image = Image.open(path).convert('RGB')
 
@@ -43,21 +48,23 @@ def im_convert(tensor):
     return image
 
 
-def get_features(image, model, layers=None):
+def get_features(image, model, style_layers=None, content_layers=None):
 
-    if layers is None:
-        layers = {'0': 'conv1_1',  # style
-                  '5': 'conv2_1',  # style
-                  '10': 'conv3_1', # style
-                  '21': 'conv4_2'} # content
-    
+    if style_layers is None and content_layers is None:
+        style_layers = config_data['style_layers']
+        content_layers = config_data['content_layers'] 
+                    
     features = {}
     x = image
     # model._modules is a dictionary holding each module in the model
-    for name, layer in model._modules.items():
+    for layer_idx, layer in model._modules.items():
         x = layer(x)
-        if name in layers:
-            features[layers[name]] = x
+        if layer_idx in style_layers:
+            # get the layer_name (key), without the weight (value)
+            layer_name= ''.join(*style_layers[layer_idx])
+            features[layer_name] = x
+        elif layer_idx in content_layers:
+            features[content_layers[layer_idx]] = x
 
     return features
 
@@ -68,10 +75,6 @@ def gram_matrix(tensor):
     gram = torch.mm(tensor, tensor.t())
 
     return gram
-
-# load configuration data
-with open('config.json') as config_file:
-    config_data = json.load(config_file)
 
 # use the pretrained vgg19 CNN
 vgg = models.vgg19(pretrained=True).features
@@ -85,9 +88,9 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 vgg.to(device)
 
 # load in content and style image
-content = load_image('images/space_needle.jpg').to(device)
+content = load_image(config_data['paths']['content_image_path']).to(device)
 # resize style image to match content image
-style = load_image('images/ben_passmore.jpg', shape=content.shape[-2:]).to(device)
+style = load_image(config_data['paths']['style_image_path'], shape=content.shape[-2:]).to(device)
 
 # get desired content and style features
 content_features = get_features(content, vgg)
@@ -98,11 +101,6 @@ style_grams = {layer: gram_matrix(style_features[layer]) for layer in style_feat
 
 # prepare a copy of the content image that will be iteratively altered
 target = content.clone().requires_grad_(True).to(device)
-
-# set weights to fiddle with the way the style is transfered
-style_weights = {'conv1_1': 1.,
-                 'conv2_1': 0.8,
-                 'conv3_1': 0.5}
 
 content_weight = config_data['content_weight']
 style_weight = config_data['style_weight']
@@ -119,15 +117,16 @@ for ii in range(1, steps+1):
     
     style_loss = 0
 
-    for layer in style_weights:
-        target_feature = target_features[layer]
-        style_feature = style_features[layer]
+    for layer_idx, layer in config_data['style_layers'].items():
+        target_feature = target_features["".join(*layer)]
+        style_feature = style_features["".join(*layer)]
         _, d, h, w = target_feature.shape
 
         target_gram = gram_matrix(target_feature)
         style_gram = gram_matrix(style_feature)
 
-        layer_style_loss = torch.mean((style_gram - target_gram) ** 2) * style_weights[layer]
+        layer_style_loss = torch.mean((style_gram - target_gram) ** 2) * list(layer.values())[0]
+        print(list(layer.values())[0])
         style_loss += layer_style_loss / (d * h * w)
 
     total_loss = content_weight * content_loss + style_weight * style_loss
