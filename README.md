@@ -4,4 +4,4 @@ An implementation of style transfer using a pretrained VGG19 network as describe
 
 https://www.cv-foundation.org/openaccess/content_cvpr_2016/papers/Gatys_Image_Style_Transfer_CVPR_2016_paper.pdf
 
-Configuration details are set in the config.json file.
+Hyperparameters are set in the config.json file.
